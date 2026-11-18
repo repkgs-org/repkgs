@@ -27,6 +27,7 @@ import ../../ll/llvm/subproject.nix
   "runtimes"
   {
     name.set = "flang-rt";
+    patches.set = lib.on (platform.os == "windows") [ ./mingw.patch ];
     cmake.defs.merge = {
       LLVM_ENABLE_RUNTIMES = "flang-rt";
       LLVM_DEFAULT_TARGET_TRIPLE = platform.clangTarget;
@@ -44,11 +45,19 @@ import ../../ll/llvm/subproject.nix
     };
     # a static runtime, nothing of llvm is linked (LLVM_DIR still finds its cmake files)
     dependencies.set = [ ];
-    platforms.set.os = [ "linux" ];
+    # linux and mingw. msvc builds a set of differently named runtimes this conf does not name
+    platforms.set.libc = [
+      "glibc"
+      "musl"
+      "mingw"
+    ];
     phases.after.set."cmake.install" = [
       {
         name = "gfortran";
         run = ''
+          # on windows the static runtime is .static (beside where a DLL's import library would
+          # go), flang links -lflang_rt.runtime
+          for f in (glob $"($c.out)/lib/clang/*/lib/*/libflang_rt.runtime.static.a") { cp $f ($f | str replace ".static.a" ".a") }
           # "@/" is jig's own prefix (driver.cc), so the conf survives the move to the store
           let rt = (files --dirs $"($c.out)/lib/clang/*/lib/*" | first | str replace $c.out "@")
           let finclude = (files --dirs $"($c.out)/lib/clang/*/finclude/flang/*" | first | str replace $c.out "@")
@@ -69,5 +78,6 @@ import ../../ll/llvm/subproject.nix
         '';
       }
     ];
-    bin.set = [ "gfortran" ];
+    # a build-machine program: no gfortran.exe to check on windows
+    bin.set = lib.on (platform.os != "windows") [ "gfortran" ];
   }

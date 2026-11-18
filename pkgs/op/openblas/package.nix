@@ -24,7 +24,14 @@ package {
   # FC below names flang-rt by path rather than depending on it, so its own
   # platforms never propagate here and evaluating a windows openblas throws
   # instead of reporting the package unsupported. Repeat its constraint.
-  platforms.os = [ "linux" ];
+  platforms.libc = [
+    "glibc"
+    "musl"
+    "mingw"
+  ];
+  # on windows the stack protector aborts in the kernels' callers ("stack smashing detected",
+  # utest kernel_regress and the cblat tests); MSYS2 builds it without its default flags too
+  cc.hardening.stackprotector = platform.os != "windows";
   patches = [ ./upstream-power-integrated-as.patch ];
   make.flags = [
     "DYNAMIC_ARCH=1"

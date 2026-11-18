@@ -1,0 +1,47 @@
+flang-rt on mingw, as MSYS2's 0102 and 0103 (mingw-w64-flang):
+- random.cpp: mingw defines CLOCK_REALTIME, but clock_gettime is winpthreads, which nothing links
+- CMakeLists.txt: the WIN32 branch builds the MSVC runtime variants; mingw takes the unix one
+- command.cpp: GetCurrentProcessId() returns DWORD, mingw has pid_t getpid() in <process.h>
+
+diff -ru a/flang-rt/lib/runtime/CMakeLists.txt b/flang-rt/lib/runtime/CMakeLists.txt
+--- a/flang-rt/lib/runtime/CMakeLists.txt
++++ b/flang-rt/lib/runtime/CMakeLists.txt
+@@ -323,7 +323,7 @@
+ endif ()
+ 
+ 
+-if (NOT WIN32)
++if (NOT MSVC)
+   add_flangrt_library(flang_rt.runtime STATIC SHARED
+     ${sources}
+     LINK_LIBRARIES ${Backtrace_LIBRARY}
+diff -ru a/flang-rt/lib/runtime/command.cpp b/flang-rt/lib/runtime/command.cpp
+--- a/flang-rt/lib/runtime/command.cpp
++++ b/flang-rt/lib/runtime/command.cpp
+@@ -23,10 +23,14 @@
+ #define unlink _unlink
+ #define PATH_MAX MAX_PATH
+ 
++#ifdef _MSC_VER
+ // On Windows GetCurrentProcessId returns a DWORD aka uint32_t
+ #include <processthreadsapi.h>
+ inline pid_t getpid() { return GetCurrentProcessId(); }
+ #else
++#include <process.h> // mingw declares getpid there
++#endif
++#else
+ #include <unistd.h> //getpid() unlink()
+ 
+ #ifndef PATH_MAX
+diff -ru a/flang-rt/lib/runtime/random.cpp b/flang-rt/lib/runtime/random.cpp
+--- a/flang-rt/lib/runtime/random.cpp
++++ b/flang-rt/lib/runtime/random.cpp
+@@ -39,7 +39,7 @@
+     if (repeatable) {
+       generator.seed(0);
+     } else {
+-#ifdef CLOCK_REALTIME
++#if defined(CLOCK_REALTIME) && !defined(__MINGW32__)
+       timespec ts;
+       clock_gettime(CLOCK_REALTIME, &ts);
+       generator.seed(ts.tv_sec ^ ts.tv_nsec);
